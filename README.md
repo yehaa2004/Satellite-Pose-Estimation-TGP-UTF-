@@ -1,2 +1,322 @@
-# Satellite-Pose-Estimation-TGP-UTF-
-Transformer-Guided Geometric Pose Estimation with Uncertainty-Aware Temporal Fusion for Onboard Satellite Pose Estimation (TGP-UTF)
+# 🚀 Transformer-Guided Geometric Pose Estimation with Uncertainty-Aware Temporal Fusion (TGP-UTF)
+
+### Monocular 6-DoF Satellite Pose Estimation for Autonomous Spacecraft Rendezvous and Docking
+
+<p align="center">
+  <strong>Deep Learning | Computer Vision | Vision Transformers | Geometric Pose Estimation | Uncertainty Quantification | Temporal Fusion</strong>
+</p>
+
+## 📌 Overview
+
+**TGP-UTF** is an uncertainty-aware deep learning framework designed to estimate the six-degree-of-freedom (6-DoF) pose of non-cooperative satellites using monocular camera images.
+
+The framework integrates Transformer-based keypoint regression, geometric pose recovery, uncertainty-aware self-training, and temporal filtering to improve the reliability of satellite pose estimation.
+
+The research is motivated by autonomous rendezvous and docking applications, particularly ISRO's SpaDeX mission, where accurate relative pose estimation is essential for spacecraft navigation and guidance.
+
+Unlike conventional approaches that treat keypoint predictions independently, TGP-UTF predicts per-keypoint uncertainty and reuses it throughout the geometric estimation and temporal fusion pipeline.
+
+**Key output:**
+- 3D translation: (x, y, z)
+- 3D orientation: Quaternion (qx, qy, qz, qw)
+- Per-keypoint uncertainty estimates
+- Smoothed pose trajectory with uncertainty bounds (±3σ)
+
+## 🎯 Research Objectives
+
+- Develop robust monocular 6-DoF pose estimation for non-cooperative spacecraft.
+- Integrate Transformer-based keypoint detection with geometric pose recovery.
+- Incorporate uncertainty estimation for reliable keypoint selection.
+- Reduce the synthetic-to-real domain gap through uncertainty-gated self-training.
+- Improve pose consistency through adaptive temporal filtering.
+- Investigate onboard deployment on resource-constrained computing platforms.
+
+## 🏗️ Proposed Architecture
+
+TGP-UTF consists of five integrated stages.
+
+### Stage 1: Satellite Segmentation and ROI Extraction
+
+**Model:** Custom U-Net
+
+- Segments the satellite region from the input image.
+- Generates a region of interest (ROI).
+- Uses convex-hull masks generated from projected 3D keypoints as weak supervision.
+- Extracts satellite crops for subsequent keypoint estimation.
+
+### Stage 2: Transformer-Based Keypoint Regression with Uncertainty
+
+**Model:** Vision Transformer (ViT-Small/16)
+
+- Predicts eight satellite keypoints.
+- Estimates normalized 2D coordinates (u, v).
+- Predicts individual keypoint uncertainty (σ).
+- Uses Gaussian Negative Log-Likelihood (Gaussian NLL) loss.
+- Learns uncertainty-aware keypoint representations.
+
+### Stage 3: Confidence-Weighted Geometric Pose Estimation
+
+**Algorithms:** RANSAC + EPnP + Levenberg–Marquardt
+
+- Converts predicted keypoints into image coordinates.
+- Filters unreliable correspondences using predicted uncertainty.
+- Performs confidence-weighted geometric pose recovery.
+- Estimates 3D rotation and translation.
+- Refines the recovered pose using Levenberg–Marquardt optimization.
+
+### Stage 4: Uncertainty-Gated Self-Training
+
+**Approach:** Pseudo-Labeling and Domain Adaptation
+
+- Uses high-confidence predictions from unlabeled real images.
+- Applies uncertainty and reprojection-error gates.
+- Generates pseudo-labels for reliable keypoints.
+- Fine-tunes the Stage 2 keypoint regression model.
+
+*Note: This is an optional training-time adaptation stage for additional unlabeled real-world data.*
+
+### Stage 5: Uncertainty-Aware Temporal Fusion
+
+**Algorithm:** Unscented Kalman Filter (UKF)
+
+- Processes time-ordered 6-DoF pose estimates.
+- Maintains a 10-dimensional state containing translation, quaternion orientation, and velocity.
+- Adapts measurement noise based on predicted keypoint uncertainty.
+- Smooths pose trajectories.
+- Produces uncertainty estimates for temporal pose tracking.
+
+### Core Research Contribution
+
+The keypoint uncertainty predicted in Stage 2 is reused across three subsequent operations:
+
+1. **Stage 3:** Confidence-weighted geometric pose estimation.
+2. **Stage 4:** Uncertainty-gated pseudo-label selection.
+3. **Stage 5:** Adaptive measurement-noise scaling in the UKF.
+
+This creates a unified uncertainty-aware estimation pipeline.
+
+## 🔬 Dataset
+
+**Dataset:** ISITE – URSC Hardware-in-the-Loop Simulation (HILS) Test Rig
+
+The experimental dataset was captured using:
+- OAK-D camera
+- Jetson Nano
+- Robotic arm
+- Satellite mock-up
+- Camera pose information from JSON metadata
+
+| Dataset information | Details |
+|---|---|
+| Total captures | 983 |
+| Usable frames | 975 |
+| Training samples | 885 |
+| Validation samples | 98 |
+| Image resolution | 1920 × 1080 |
+| Camera focal length | fx = fy ≈ 1544.78 |
+| Keypoints | 8 CAD-based 3D keypoints |
+
+**Important:** The dataset is proprietary ISRO/URSC research data and is not publicly available. Access requires appropriate authorization.
+
+Ground-truth 2D keypoints and 6-DoF pose labels are generated by projecting known 3D CAD keypoints using the calibrated camera model and verified camera-pose conversion.
+
+## 🛠️ Technology Stack
+
+| Category | Technologies |
+|---|---|
+| Programming | Python |
+| Deep Learning | PyTorch |
+| Transformer | Vision Transformer (ViT-Small) |
+| Segmentation | U-Net |
+| Computer Vision | OpenCV |
+| Geometric Estimation | RANSAC, EPnP, Levenberg–Marquardt |
+| Temporal Filtering | Unscented Kalman Filter |
+| Scientific Computing | NumPy, SciPy |
+| Model Library | timm |
+| UKF Library | filterpy |
+| Development | Google Colab, Jupyter Notebook |
+| Hardware | OAK-D Camera, Jetson Nano |
+
+## 📊 Experimental Results
+
+The proposed pipeline was evaluated using 98 validation frames.
+
+### Key Results
+
+| Evaluation metric | Result |
+|---|---:|
+| Stage 2 keypoint validation error | 32.5 → 1.10 pixels |
+| Stage 1 best validation loss | 0.0059 |
+| PnP solver failures | 0 / 98 |
+| Mean rotation error before correction | 179.43° |
+| Mean rotation error after correction | 11.89° |
+| Median rotation error after correction | 5.4° |
+| Rotation error reduction | 93.4% |
+
+### Pose Ambiguity Analysis
+
+An approximately 180-degree rotational ambiguity was identified during geometric pose evaluation.
+
+A symmetry-aware correction using a 180-degree rotation around the Z-axis reduced the mean rotation error from 179.43° to 11.89°.
+
+However, the translation error remains approximately 16 metres and requires further investigation.
+
+### Uncertainty-Gate Evaluation
+
+The attention-based variant demonstrated:
+
+- Accuracy: 94.64%
+- Precision: 88.66%
+- Recall: 74.14%
+- F1-score: 80.75%
+- Average Precision: 74.39%
+
+The threshold was tuned using the same validation split, so these results should not be interpreted as independent test performance.
+
+## 📏 Evaluation Metrics
+
+The framework uses the following evaluation metrics:
+
+- **Keypoint Pixel Error:** Measures the distance between predicted and ground-truth 2D keypoints.
+- **PCK (Percentage of Correct Keypoints):** Evaluates keypoint localization accuracy.
+- **Rotation Error:** Measures the angular difference between predicted and ground-truth orientations.
+- **Translation Error:** Measures the Euclidean distance between predicted and ground-truth translations.
+- **ADD (Average Distance of Model Points):** Evaluates 3D pose estimation accuracy.
+- **SPEED Score:** Evaluates translation and rotation estimation errors.
+- **Accuracy, Precision, Recall, F1-score and Average Precision:** Evaluate the reliability of uncertainty-based keypoint selection.
+
+## 📂 Repository Structure
+
+```text
+TGP-UTF/
+│
+├── README.md
+│
+├── notebooks/
+│   └── TGP_UTF_Satellite_Pose_Pipeline.ipynb
+│
+├── models/
+│   ├── unet_segmentation.py
+│   ├── vit_keypoint_regressor.py
+│   └── uncertainty_ukf.py
+│
+├── pipeline/
+│   ├── label_generation.py
+│   ├── roi_extraction.py
+│   ├── keypoint_prediction.py
+│   ├── geometric_pose_estimation.py
+│   ├── self_training.py
+│   └── temporal_fusion.py
+│
+├── evaluation/
+│   ├── keypoint_metrics.py
+│   ├── pose_metrics.py
+│   └── uncertainty_metrics.py
+│
+├── results/
+│   └── README.md
+│
+└── requirements.txt
+```
+
+*The structure above is a suggested organization for the repository; it does not imply that every listed Python module currently exists as a separate file.*
+
+## ⚙️ Installation and Execution
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/YOUR_USERNAME/TGP-UTF.git
+cd TGP-UTF
+```
+
+### 2. Install dependencies
+
+```bash
+pip install torch torchvision timm
+pip install numpy scipy opencv-python-headless
+pip install filterpy matplotlib scikit-learn tqdm
+```
+
+### 3. Configure the dataset
+
+Place the authorized ISITE/URSC dataset in your Google Drive.
+
+Update the dataset path in the notebook:
+
+```python
+ZIP_PATH = "/content/drive/MyDrive/Gsat_RGB_data.zip"
+```
+
+### 4. Run the notebook
+
+Open the notebook in Google Colab or Jupyter Notebook.
+
+Execute the cells sequentially:
+
+1. Install dependencies and configure the environment.
+2. Load the dataset and camera calibration.
+3. Generate keypoint and pose labels.
+4. Train the U-Net segmentation model.
+5. Train the ViT keypoint regression model.
+6. Perform confidence-weighted RANSAC-EPnP.
+7. Evaluate the recovered pose.
+8. Apply uncertainty-gated self-training where unlabeled data is available.
+9. Perform temporal fusion using UKF.
+
+**Note:** The camera calibration, image resolution, coordinate conventions, and label-generation procedure must be verified before training.
+
+## ⚠️ Limitations
+
+- Translation error of approximately 16 metres remains unresolved.
+- Evaluation is currently based on one laboratory satellite mock-up.
+- No independent test dataset is available.
+- Stages 4 and 5 require more comprehensive quantitative evaluation.
+- On-orbit imagery has not yet been evaluated.
+- Onboard inference latency has not been benchmarked.
+- Graph convolution over CAD keypoint edges is a proposed extension and is not implemented in the current pipeline.
+
+## 🚀 Future Work
+
+- Investigate translation-scale and reference-frame inconsistencies.
+- Improve uncertainty calibration and pseudo-label reliability.
+- Evaluate temporal stability using longer sequences.
+- Extend evaluation using additional spacecraft configurations.
+- Explore model quantization and pruning.
+- Benchmark real-time inference on Jetson-class hardware.
+- Investigate graph-based keypoint refinement using CAD structural relationships.
+- Evaluate the framework on additional satellite pose estimation datasets.
+
+## 📚 Publication
+
+**Conference Publication:** IEEE I-SMAC 2026
+
+10th International Conference on IoT in Social, Mobile, Analytics and Cloud.
+
+- Paper ID: ISMAC-1232
+- Presented: 16–18 September 2026
+- Published paper: [IEEE Xplore](https://ieeexplore.ieee.org/)
+
+## 👩‍💻 Research Team
+
+**Researcher:** Yehaasary KM  
+M.Tech Artificial Intelligence  
+Amrita School of Computing, Amrita Vishwa Vidyapeetham, Coimbatore.
+
+**Supervisor:** Dr. T. Senthil Kumar  
+Professor, Computer Science and Engineering, Amrita School of Computing.
+
+**Research Collaborator:** Dr. Ravikumar Lagisetty  
+Group Director, Mission Simulation Group, URSC, ISRO.
+
+## 📜 License and Data Availability
+
+This repository is intended for academic and research purposes.
+
+The ISRO/URSC experimental dataset, camera captures, and proprietary calibration information are not included. The availability and licensing of any released source code should be specified by the repository owner.
+
+---
+
+<p align="center">
+  <strong>Advancing Uncertainty-Aware Monocular Pose Estimation for Autonomous Spacecraft Navigation.</strong>
+</p>
